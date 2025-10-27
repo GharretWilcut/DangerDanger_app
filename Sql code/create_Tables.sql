@@ -20,3 +20,11 @@ CREATE TABLE Reports (
 
 
 drop table reports;
+
+--Radius Query Example
+-- get incidents within 2000 meters of (lng, lat)
+SELECT id, type, description, created_at,
+  ST_X(ST_AsText(ST_Transform(ST_SetSRID(ST_Point(ST_X(location::geometry), ST_Y(location::geometry)),4326),4326))) as lng,
+  ST_Y(ST_AsText(ST_Transform(ST_SetSRID(ST_Point(ST_X(location::geometry), ST_Y(location::geometry)),4326),4326))) as lat
+FROM Reports
+WHERE ST_DWithin(location, ST_MakePoint(-87.6298, 41.8781)::geography, 2000);
