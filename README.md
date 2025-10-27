@@ -6,3 +6,5 @@ Designing an application that notifies users of local dangers as well as allows 
 * Open Street Maps Api -- 
 * Swift -- apple widget
 * Kotlin -- android widget
+
+## Database Schema
