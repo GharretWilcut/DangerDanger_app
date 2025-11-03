@@ -1,0 +1,49 @@
+{
+  "app_name": "Community Safety Alert System",
+  "main_functionality": [
+    "Submit and view danger reports",
+    "Receive live safety alerts",
+    "View nearby danger zones on map",
+    "Filter reports by location or type",
+    "Verify report authenticity",
+    "Send quick location pings",
+    "Toggle dark mode and notification settings",
+    "View global and local events",
+    "Simple, user-friendly interface"
+  ],
+  "screens": {
+    "Home": [
+      "View latest reports",
+      "Access notifications",
+      "Navigate to map, reports, or settings"
+    ],
+    "Report": [
+      "Submit a new danger report",
+      "Attach location and description",
+      "View submitted reports"
+    ],
+    "Map": [
+      "Display danger zones",
+      "Show safe routes",
+      "Filter visible reports by location"
+    ],
+    "Notifications": [
+      "Show live alerts",
+      "Mark alerts as read or dismissed",
+      "Filter alerts by category"
+    ],
+    "GlobalEvents": [
+      "Browse global incidents",
+      "View verified updates"
+    ],
+    "Settings": [
+      "Toggle dark mode",
+      "Manage alert preferences",
+      "Adjust app display options"
+    ],
+    "Admin": [
+      "Review and validate reports",
+      "Manage flagged content"
+    ]
+  }
+}

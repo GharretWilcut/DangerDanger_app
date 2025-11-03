@@ -1,0 +1,37 @@
+========================================================================
+QUICK START - RUN THESE COMMANDS IN ORDER
+========================================================================
+
+STEP 1: Navigate to project directory
+cd d:\Documentss\DangerDanger\DangerDanger_app\incident-map-app
+
+STEP 2: Install dependencies (first time only)
+npm install
+
+STEP 3: Start your backend server (in a SEPARATE terminal)
+Navigate to where index.js is located, then:
+node index.js
+
+STEP 4: Start the Expo app (in the incident-map-app directory)
+npm start
+
+Then press:
+- 'a' for Android emulator
+- 'i' for iOS simulator  
+- Scan QR code with Expo Go app on your phone
+
+========================================================================
+IMPORTANT NOTES:
+========================================================================
+
+1. Node.js must be installed: https://nodejs.org/
+   After installing, RESTART your terminal
+
+2. Backend must be running before starting the app
+   Backend runs on: http://localhost:4000
+
+3. If using physical device, update config/constants.js:
+   Change BASE_URL to your computer's IP address
+   Example: http://192.168.1.100:4000
+
+========================================================================
