@@ -23,6 +23,7 @@ export default function SignupScreen({ navigation }) {
   const { setToken } = useContext(AuthContext);
 
   const signup = async () => {
+    console.log('Signup button pressed'); 
     if (!name || !email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;

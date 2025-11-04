@@ -19,7 +19,7 @@ CREATE TABLE Reports (
 );
 
 
-drop table reports;
+--drop table reports;
 
 --Radius Query Example
 -- get incidents within 2000 meters of (lng, lat)

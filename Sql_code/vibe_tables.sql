@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- users table
-CREATE TABLE users (
+CREATE TABLE Users (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
@@ -12,9 +12,9 @@ CREATE TABLE users (
 );
 
 -- incidents / reports table
-CREATE TABLE incidents (
+CREATE TABLE Incidents (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  user_id uuid REFERENCES Users(id) ON DELETE SET NULL,
   type TEXT NOT NULL,            -- "crash", "crime", "near-miss", etc
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -29,8 +29,8 @@ CREATE INDEX idx_incidents_geog ON incidents USING GIST (location);
 
 
 --sample insert 
-INSERT INTO incidents (user_id, type, description, location)
-VALUES ('<user-uuid>', 'crash', 'Two-car collision', ST_GeographyFromText('SRID=4326;POINT(-87.6298 41.8781)'));
+INSERT INTO Incidents (user_id, type, description, location)
+VALUES ('d8fa3b16-c010-4d73-8de8-1db21f682a06', 'crash', 'Two-car collision', ST_GeographyFromText('SRID=4326;POINT(-87.6298 41.8781)'));
 -- replace <user-uuid> with an actual UUID from the users table
 
 -- get incidents within 2000 meters of (lng, lat)
