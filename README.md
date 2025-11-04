@@ -141,14 +141,14 @@ The frontend expects a backend API with these endpoints:
 
 ## Future Enhancements
 
-- [ ] Push notifications
-- [ ] Photo attachments for reports
-- [ ] Reverse geocoding for location names
-- [ ] Offline mode support
-- [ ] Report verification by users
-- [ ] Integration with weather APIs
-- [ ] Integration with news APIs for global events
+- Push notifications
+- Photo attachments for reports
+- Reverse geocoding for location names
+- Offline mode support
+- Report verification by users
+- Integration with weather APIs
+- Integration with news APIs for global events
 
 ## License
 
-See LICENSE file in parent directory.
+MIT License
