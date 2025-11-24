@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import * as Location from 'expo-location';
+import { requestLocationPermission, getCurrentPosition } from '../utils/geolocation';
 import { AuthContext } from '../App';
 import { useTheme } from '../theme';
 import { BASE_URL, API_ENDPOINTS } from '../config/constants';
@@ -52,12 +52,12 @@ export default function ReportForm({ route, navigation }) {
 
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await requestLocationPermission();
       if (status !== 'granted') {
         Alert.alert('Permission required', 'Location permission needed to submit reports.');
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({});
+      const loc = await getCurrentPosition({});
       setLocation({
         lat: loc.coords.latitude,
         lng: loc.coords.longitude,

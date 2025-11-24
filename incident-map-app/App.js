@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storage } from './utils/storage';
 
 // Screens
 import MapScreen from './screens/MapScreen';
@@ -71,7 +71,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem('token').then((t) => {
+    storage.getItem('token').then((t) => {
       if (t) setToken(t);
       setLoading(false);
     });
@@ -82,9 +82,9 @@ export default function App() {
     setToken: async (t) => {
       setToken(t);
       if (t) {
-        await AsyncStorage.setItem('token', t);
+        await storage.setItem('token', t);
       } else {
-        await AsyncStorage.removeItem('token');
+        await storage.removeItem('token');
       }
     },
   };

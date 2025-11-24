@@ -9,7 +9,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../App';
 import { useTheme } from '../theme';
 
@@ -34,8 +33,7 @@ export default function SettingsScreen({ navigation }) {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem('token');
+          onPress: () => {
             setToken(null);
           },
         },
@@ -77,7 +75,7 @@ export default function SettingsScreen({ navigation }) {
               value={darkMode}
               onValueChange={(value) => {
                 setDarkMode(value);
-                // In a real app, save to AsyncStorage and use a theme context
+                // In a real app, save to localStorage and use a theme context
                 Alert.alert(
                   'Note',
                   'Dark mode preference will be saved. Restart the app to apply changes.'

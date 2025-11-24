@@ -1,16 +1,8 @@
 // API Configuration
-// Update this URL based on your environment:
-// - Android Emulator: http://10.0.2.2:4000
-// - iOS Simulator: http://localhost:4000
-// - Physical Device: http://YOUR_COMPUTER_IP:4000 (e.g., http://192.168.1.100:4000)
-// 
-// To use environment variables, install expo-constants:
-// npm install expo-constants
-// Then use: import Constants from 'expo-constants';
-// export const BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://10.0.2.2:4000';
+// Web app configuration - uses localhost for development
+// For production, update this to your production API URL
 
-export const BASE_URL = 'http://10.0.2.2:4000'; // Default for Android emulator
-// Change this to match your backend server URL
+export const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
 
 export const API_ENDPOINTS = {
   AUTH: {

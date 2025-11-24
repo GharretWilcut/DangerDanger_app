@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,41 +7,67 @@ import {
   Text,
   Modal,
   ScrollView,
-  TextInput,
 } from 'react-native';
-import MapView, { Marker, UrlTile, Circle, Polyline } from 'react-native-maps';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents } from 'react-leaflet';
+import { Icon } from 'leaflet';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import * as Location from 'expo-location';
+import { requestLocationPermission, getCurrentPosition } from '../utils/geolocation';
 import { AuthContext } from '../App';
 import { useTheme } from '../theme';
 import { BASE_URL, API_ENDPOINTS } from '../config/constants';
 
+// Fix for default marker icons in react-leaflet
+delete Icon.Default.prototype._getIconUrl;
+Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+// Component to handle map click events
+function MapClickHandler({ onMapClick }) {
+  useMapEvents({
+    contextmenu: (e) => {
+      // Right-click for web (equivalent to long press on mobile)
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 export default function MapScreen({ navigation, route }) {
-  const [region, setRegion] = useState(null);
+  const [center, setCenter] = useState([37.78825, -122.4324]); // Default location
+  const [zoom, setZoom] = useState(13);
   const [incidents, setIncidents] = useState([]);
   const [filter, setFilter] = useState('all');
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showSafeRoutes, setShowSafeRoutes] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const auth = useContext(AuthContext);
   const theme = useTheme();
+  const mapRef = useRef(null);
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Location permission needed to show nearby incidents.');
-        return;
+      try {
+        const { status } = await requestLocationPermission();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Location permission needed to show nearby incidents.');
+          // Use default location
+          loadIncidents(center[0], center[1]);
+          return;
+        }
+        const loc = await getCurrentPosition();
+        const newCenter = [loc.coords.latitude, loc.coords.longitude];
+        setCenter(newCenter);
+        loadIncidents(newCenter[0], newCenter[1]);
+      } catch (error) {
+        console.warn('Location error:', error);
+        Alert.alert('Location Error', 'Could not get your location. Using default location.');
+        loadIncidents(center[0], center[1]);
       }
-      const loc = await Location.getCurrentPositionAsync({});
-      setRegion({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-      loadIncidents(loc.coords.latitude, loc.coords.longitude);
     })();
   }, []);
 
@@ -50,12 +76,12 @@ export default function MapScreen({ navigation, route }) {
       const incident = incidents.find((inc) => inc.id === route.params.incidentId);
       if (incident) {
         setSelectedIncident(incident);
-        setRegion({
-          latitude: parseFloat(incident.lat),
-          longitude: parseFloat(incident.lng),
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
+        const newCenter = [parseFloat(incident.lat), parseFloat(incident.lng)];
+        setCenter(newCenter);
+        setZoom(15);
+        if (mapRef.current) {
+          mapRef.current.setView(newCenter, 15);
+        }
       }
     }
   }, [route?.params?.incidentId, incidents]);
@@ -69,9 +95,8 @@ export default function MapScreen({ navigation, route }) {
     }
   };
 
-  const onLongPress = (e) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    navigation.navigate('Report', { lat: latitude, lng: longitude });
+  const onMapClick = (lat, lng) => {
+    navigation.navigate('Report', { lat, lng });
   };
 
   const getMarkerColor = (type) => {
@@ -96,6 +121,22 @@ export default function MapScreen({ navigation, route }) {
     return icons[type?.toLowerCase()] || icons.default;
   };
 
+  const createCustomIcon = (type) => {
+    const color = getMarkerColor(type);
+    
+    return new Icon({
+      iconUrl: `data:image/svg+xml;base64,${btoa(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="16" fill="${color}" stroke="white" stroke-width="2"/>
+          <circle cx="18" cy="18" r="8" fill="white" opacity="0.3"/>
+        </svg>
+      `)}`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+      popupAnchor: [0, -36],
+    });
+  };
+
   const filteredIncidents = incidents.filter((inc) => {
     if (filter === 'all') return true;
     return inc.type?.toLowerCase() === filter.toLowerCase();
@@ -107,48 +148,54 @@ export default function MapScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      {region && (
-        <MapView
-          style={styles.map}
-          initialRegion={region}
-          region={region}
-          onLongPress={onLongPress}
-          showsUserLocation
-          showsMyLocationButton={false}
-          onRegionChangeComplete={setRegion}
+      <View style={styles.mapWrapper}>
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          style={{ height: '100%', width: '100%', zIndex: 0 }}
+          whenReady={() => setMapReady(true)}
+          ref={mapRef}
         >
-          {/* OpenStreetMap tiles */}
-          <UrlTile
-            urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-            tileSize={256}
-            zIndex={0}
-            maximumNativeZoom={19}
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             subdomains={['a', 'b', 'c']}
           />
+          <MapClickHandler onMapClick={onMapClick} />
+          
           {filteredIncidents.map((inc) => (
             <Marker
               key={inc.id}
-              coordinate={{ latitude: parseFloat(inc.lat), longitude: parseFloat(inc.lng) }}
-              onPress={() => setSelectedIncident(inc)}
+              position={[parseFloat(inc.lat), parseFloat(inc.lng)]}
+              icon={createCustomIcon(inc.type)}
+              eventHandlers={{
+                click: () => setSelectedIncident(inc),
+              }}
             >
-              <View style={[styles.markerContainer, { backgroundColor: getMarkerColor(inc.type) }]}>
-                <Ionicons name={getMarkerIcon(inc.type)} size={20} color="#fff" />
-              </View>
+              <Popup>
+                <div style={{ minWidth: '150px' }}>
+                  <strong>{inc.type}</strong>
+                  <br />
+                  {inc.description && <span>{inc.description.substring(0, 50)}...</span>}
+                </div>
+              </Popup>
             </Marker>
           ))}
-          {showSafeRoutes && region && (
+          
+          {showSafeRoutes && (
             <Circle
-              center={region}
+              center={center}
               radius={2000}
-              strokeColor={theme.success}
-              fillColor={`${theme.success}30`}
-              strokeWidth={2}
+              pathOptions={{
+                color: theme.success,
+                fillColor: theme.success,
+                fillOpacity: 0.3,
+                weight: 2,
+              }}
             />
           )}
-        </MapView>
-      )}
+        </MapContainer>
+      </View>
 
       {/* Controls */}
       <View style={styles.controls}>
@@ -170,16 +217,18 @@ export default function MapScreen({ navigation, route }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={() => {
-            Location.getCurrentPositionAsync({}).then((loc) => {
-              setRegion({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              });
-              loadIncidents(loc.coords.latitude, loc.coords.longitude);
-            });
+          onPress={async () => {
+            try {
+              const loc = await getCurrentPosition();
+              const newCenter = [loc.coords.latitude, loc.coords.longitude];
+              setCenter(newCenter);
+              if (mapRef.current) {
+                mapRef.current.setView(newCenter, 13);
+              }
+              loadIncidents(newCenter[0], newCenter[1]);
+            } catch (error) {
+              Alert.alert('Error', 'Could not get your location');
+            }
           }}
         >
           <Ionicons name="locate" size={24} color={theme.text} />
@@ -187,8 +236,8 @@ export default function MapScreen({ navigation, route }) {
         <TouchableOpacity
           style={styles.controlButton}
           onPress={() => {
-            if (region) {
-              loadIncidents(region.latitude, region.longitude);
+            if (center) {
+              loadIncidents(center[0], center[1]);
             }
           }}
         >
@@ -321,14 +370,17 @@ const getStyles = (theme) =>
     container: {
       flex: 1,
     },
-    map: {
-      flex: 1,
+    mapWrapper: {
+      width: '100%',
+      height: '100%',
+      position: 'relative',
     },
     controls: {
       position: 'absolute',
       right: 16,
       top: 60,
       gap: 8,
+      zIndex: 1000,
     },
     controlButton: {
       width: 48,
@@ -342,15 +394,6 @@ const getStyles = (theme) =>
       shadowOpacity: 0.25,
       shadowRadius: 4,
       elevation: 4,
-    },
-    markerContainer: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: '#fff',
     },
     modalOverlay: {
       flex: 1,
