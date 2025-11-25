@@ -1,17 +1,59 @@
+datasource db {
+  provider = "postgresql"
+}
+
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+model UserEmails {
+  user_id String @id @default(uuid())
+  email   String
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model spatial_ref_sys {
-  srid      Int     @id
-  auth_name String? @db.VarChar(256)
-  auth_srid Int?
-  srtext    String? @db.VarChar(2048)
-  proj4text String? @db.VarChar(2048)
+model UserPasswords {
+  user_id       String @id @default(uuid())
+  password_hash String
+}
+
+model UserNames {
+  user_id String @id @default(uuid())
+  name    String?
+}
+
+model UserCreationTimes {
+  user_id    String   @id @default(uuid())
+  created_at DateTime @default(now())
+}
+
+model IncidentTypes {
+  incident_id String @id @default(uuid())
+  type        String
+}
+
+model IncidentDescriptions {
+  incident_id String @id @default(uuid())
+  description String?
+}
+
+model IncidentLocations {
+  incident_id String  @id @default(uuid())
+  latitude    Float?
+  longitude   Float?
+}
+
+model IncidentSeverity {
+  incident_id String @id @default(uuid())
+  severity    Int    @default(1)
+}
+
+model IncidentApprovalStatus {
+  incident_id String  @id @default(uuid())
+  approved    Boolean @default(false)
+}
+
+model UserIncidentMap {
+  map_id      String @id @default(uuid())
+  user_id     String
+  incident_id String
 }
