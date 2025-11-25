@@ -57,3 +57,27 @@ model UserIncidentMap {
   user_id     String
   incident_id String
 }
+
+model NotificationIDs {
+  notification_id String @id @default(uuid())
+}
+
+model NotificationUsers {
+  notification_id String @id
+  user_id         String
+}
+
+model NotificationTitles {
+  notification_id String @id
+  title           String
+}
+
+model NotificationMessages {
+  notification_id String @id
+  message         String?
+}
+
+model NotificationTimes {
+  notification_id String   @id
+  created_at      DateTime @default(now())
+}

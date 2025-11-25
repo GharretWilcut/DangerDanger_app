@@ -6,6 +6,18 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 
+// KAFKA SETUP
+const { Kafka } = require("kafkajs");
+
+const kafka = new Kafka({
+  clientId: "danger-app",
+  brokers: ["localhost:9092"],
+});
+
+const producer = kafka.producer();
+(async () => { await producer.connect(); })();
+
+
 const prisma = new PrismaClient();
 const app = express();
 app.use(cors());
@@ -27,10 +39,7 @@ function authMiddleware(req, res, next) {
   }
 }
 
-/* ============================================================
-   SIGNUP
-   Creates user entries in the 4 FRAGMENTED user tables
-============================================================ */
+//signup API
 app.post("/auth/signup", async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password)
@@ -69,10 +78,7 @@ app.post("/auth/signup", async (req, res) => {
   }
 });
 
-/* ============================================================
-   LOGIN
-   Reads email → gets user_id → checks password
-============================================================ */
+//Login API
 app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -99,10 +105,7 @@ app.post("/auth/login", async (req, res) => {
   res.json({ token });
 });
 
-/* ============================================================
-   CREATE INCIDENT
-   Writes to 5 fragmented incident tables + mapping table
-============================================================ */
+//create Incident api
 app.post("/incidents", authMiddleware, async (req, res) => {
   const { type, description, lat, lng, severity = 1 } = req.body;
 
@@ -147,9 +150,7 @@ app.post("/incidents", authMiddleware, async (req, res) => {
   }
 });
 
-/* ============================================================
-   LIST INCIDENTS (simple)
-============================================================ */
+// list incidents api
 app.get("/incidents", async (req, res) => {
   const types = await prisma.incidentTypes.findMany({ take: 50 });
   const descriptions = await prisma.incidentDescriptions.findMany();
@@ -179,3 +180,147 @@ app.get("/", (req, res) => {
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log("Server listening on " + port));
+
+//submit reports api
+app.post("/usecase/submit-report", authMiddleware, async (req, res) => {
+  const { type, description, lat, lng, severity = 1 } = req.body;
+
+  if (!type || lat == null || lng == null)
+    return res.status(400).send({ error: "type, lat, lng required" });
+
+  const incidentId = crypto.randomUUID();
+
+  try {
+    // Store fragmented incident
+    await prisma.incidentTypes.create({ data: { incident_id: incidentId, type } });
+    await prisma.incidentDescriptions.create({ data: { incident_id: incidentId, description } });
+    await prisma.incidentLocations.create({ data: { incident_id: incidentId, latitude: lat, longitude: lng } });
+    await prisma.incidentSeverity.create({ data: { incident_id: incidentId, severity } });
+    await prisma.incidentApprovalStatus.create({ data: { incident_id: incidentId, approved: false } });
+
+    await prisma.userIncidentMap.create({
+      data: { user_id: req.user.id, incident_id: incidentId }
+    });
+
+    // Kafka: Event for EDA
+    await producer.send({
+      topic: "incident.created",
+      messages: [{ value: JSON.stringify({ incidentId, type, lat, lng, severity }) }]
+    });
+
+    res.json({ incidentId, status: "PENDING_VALIDATION" });
+  } catch (e) {
+    res.status(500).send({ error: "Could not create incident" });
+  }
+});
+
+//verify api
+app.post("/usecase/verify-validity/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const incident = await prisma.incidentApprovalStatus.findUnique({
+    where: { incident_id: id }
+  });
+
+  if (!incident) return res.status(404).send({ error: "Incident not found" });
+
+  await prisma.incidentApprovalStatus.update({
+    where: { incident_id: id },
+    data: { approved: true }
+  });
+
+  // Kafka event
+  await producer.send({
+    topic: "incident.validated",
+    messages: [{ value: JSON.stringify({ incident_id: id, approved: true }) }]
+  });
+
+  res.json({ status: "VALIDATED" });
+});
+
+// verify location
+app.post("/usecase/verify-location", authMiddleware, async (req, res) => {
+  const { userLat, userLng, reportLat, reportLng } = req.body;
+
+  if (!userLat || !userLng || !reportLat || !reportLng)
+    return res.status(400).send({ error: "Missing lat/lng" });
+
+  const distance = Math.sqrt(
+    Math.pow(userLat - reportLat, 2) + Math.pow(userLng - reportLng, 2)
+  );
+
+  const isValid = distance < 0.02; // ~1–2 km threshold
+
+  await producer.send({
+    topic: "location.checked",
+    messages: [{ value: JSON.stringify({ isValid, distance }) }]
+  });
+
+  res.json({ validReporter: isValid, distance });
+});
+
+
+// const ids = await prisma.notificationUsers.findMany({
+//   where: { user_id: req.user.id }
+// });
+
+
+// const notifications = await Promise.all(ids.map(async (n) => {
+//   const [title, msg, time] = await Promise.all([
+//     prisma.notificationTitles.findUnique({ where: { notification_id: n.notification_id }}),
+//     prisma.notificationMessages.findUnique({ where: { notification_id: n.notification_id }}),
+//     prisma.notificationTimes.findUnique({ where: { notification_id: n.notification_id }})
+//   ]);
+
+//   return {
+//     id: n.notification_id,
+//     title: title?.title,
+//     message: msg?.message,
+//     created_at: time?.created_at
+//   };
+// }));
+
+// res.json(notifications);
+
+
+
+// const consumer = kafka.consumer({ groupId: "notification-service" });
+
+// (async () => {
+//   await consumer.connect();
+//   await consumer.subscribe({ topic: "incident.validated" });
+
+//   await consumer.run({
+//     eachMessage: async ({ message }) => {
+//       const event = JSON.parse(message.value.toString());
+
+//       // Broadcast notifications to all users
+//       await prisma.notifications.create({
+//         data: {
+//           user_id: "ALL",   // You can create per-user instead
+//           title: "New Verified Incident",
+//           message: `Incident ${event.incident_id} is now verified.`,
+//         }
+//       });
+//     }
+//   });
+// })();
+
+
+app.get("/usecase/map-danger-zones", async (req, res) => {
+  const locs = await prisma.incidentLocations.findMany();
+  const types = await prisma.incidentTypes.findMany();
+  const severity = await prisma.incidentSeverity.findMany();
+  const status = await prisma.incidentApprovalStatus.findMany();
+
+  const result = locs.map(loc => ({
+    id: loc.incident_id,
+    lat: loc.latitude,
+    lng: loc.longitude,
+    type: types.find(t => t.incident_id === loc.incident_id)?.type || "unknown",
+    severity: severity.find(s => s.incident_id === loc.incident_id)?.severity || 1,
+    approved: status.find(s => s.incident_id === loc.incident_id)?.approved || false,
+  }));
+
+  res.json(result);
+});
