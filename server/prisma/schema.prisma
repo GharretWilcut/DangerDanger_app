@@ -1,9 +1,10 @@
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
 }
 
 model UserEmails {
@@ -17,7 +18,7 @@ model UserPasswords {
 }
 
 model UserNames {
-  user_id String @id @default(uuid())
+  user_id String  @id @default(uuid())
   name    String?
 }
 
@@ -32,19 +33,19 @@ model IncidentTypes {
 }
 
 model IncidentDescriptions {
-  incident_id String @id @default(uuid())
+  incident_id String  @id @default(uuid())
   description String?
 }
 
 model IncidentLocations {
-  incident_id String  @id @default(uuid())
+  incident_id String @id @default(uuid())
   latitude    Float?
   longitude   Float?
 }
 
 model IncidentSeverity {
   incident_id String @id @default(uuid())
-  severity    Int    @default(1)
+  severity    Int
 }
 
 model IncidentApprovalStatus {
@@ -52,32 +53,37 @@ model IncidentApprovalStatus {
   approved    Boolean @default(false)
 }
 
+/// User → Incident relationship
 model UserIncidentMap {
-  map_id      String @id @default(uuid())
   user_id     String
   incident_id String
-}
-
-model NotificationIDs {
-  notification_id String @id @default(uuid())
+  id          String @id @default(uuid())
 }
 
 model NotificationUsers {
-  notification_id String @id
+  id              String @id @default(uuid())
   user_id         String
+  notification_id String
 }
 
 model NotificationTitles {
-  notification_id String @id
+  notification_id String @id @default(uuid())
   title           String
 }
 
 model NotificationMessages {
-  notification_id String @id
-  message         String?
+  notification_id String @id @default(uuid())
+  message         String
 }
 
 model NotificationTimes {
-  notification_id String   @id
+  notification_id String   @id @default(uuid())
   created_at      DateTime @default(now())
+}
+
+model Notifications {
+  id      String @id @default(uuid())
+  user_id String
+  title   String
+  message String
 }
