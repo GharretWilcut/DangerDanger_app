@@ -71,6 +71,30 @@ The `BASE_URL` is set to `http://localhost:4000` by default. To change it:
    export const BASE_URL = 'http://localhost:4000';
    ```
 
+3. **Make Sure Postgres sql database is set up correctly**
+
+   
+   ```bash
+      cd server
+      sudo -u postgres psql
+   ```
+
+   ``` sql
+      CREATE USER youruser WITH PASSWORD 'yourpassword';
+      ALTER USER youruser CREATEDB;
+      CREATE DATABASE yourdb OWNER youruser;
+      GRANT ALL PRIVILEGES ON DATABASE yourdb TO youruser;
+      \q
+   ```
+   User and password has to match what is in the server/.env
+   
+   check to make sure it works.
+   ```bash
+      sudo systemctl start postgresql
+      sudo systemctl enable postgresql   # optional, start on boot
+      sudo systemctl status postgresql   # check running
+   ```
+
 ### Maps
 The app uses OpenStreetMap tiles via `react-leaflet`. No API key required. The map library is loaded via CDN in `web/index.html`.
 

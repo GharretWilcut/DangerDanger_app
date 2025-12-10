@@ -93,16 +93,21 @@ export default function ReportForm({ route, navigation }) {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      Alert.alert('Success', 'Report submitted successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      
+      // Close the modal first
+      navigation.goBack();
+      
+      // Then show success alert
+      setTimeout(() => {
+        Alert.alert('Success', 'Report submitted successfully!');
+      }, 300);
+      
     } catch (e) {
       Alert.alert('Submit failed', e.response?.data?.error || e.message);
     } finally {
       setLoading(false);
     }
   };
-
   const styles = getStyles(theme);
 
   return (

@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../App';
 import { useTheme } from '../theme';
@@ -19,10 +20,18 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const { token } = useContext(AuthContext);
   const theme = useTheme();
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     loadReports();
   }, []);
+
+  // Refresh when screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      loadReports();
+    }
+  }, [isFocused]);
 
   const loadReports = async () => {
     setLoading(true);
@@ -37,7 +46,6 @@ export default function HomeScreen({ navigation }) {
       setLoading(false);
     }
   };
-
   const styles = getStyles(theme);
 
   return (

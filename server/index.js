@@ -145,6 +145,56 @@ app.get("/incidents", async (req, res) => {
   res.json(incidents);
 });
 
+// DELETE INCIDENT
+app.delete("/incidents/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  
+  console.log('===== DELETE REQUEST RECEIVED =====');
+  console.log('Incident ID to delete:', id);
+  console.log('User ID:', req.user.id);
+
+  try {
+    // Check if incident exists first
+    const existingType = await prisma.IncidentTypes.findUnique({
+      where: { incident_id: id }
+    });
+    
+    console.log('Incident exists?', existingType ? 'YES' : 'NO');
+    
+    if (!existingType) {
+      console.log('Incident not found');
+      return res.status(404).send({ error: "Incident not found" });
+    }
+
+    // Delete from all related tables
+    console.log('Deleting from IncidentTypes...');
+    await prisma.IncidentTypes.deleteMany({ where: { incident_id: id } });
+    
+    console.log('Deleting from IncidentDescriptions...');
+    await prisma.IncidentDescriptions.deleteMany({ where: { incident_id: id } });
+    
+    console.log('Deleting from IncidentLocations...');
+    await prisma.IncidentLocations.deleteMany({ where: { incident_id: id } });
+    
+    console.log('Deleting from IncidentSeverity...');
+    await prisma.IncidentSeverity.deleteMany({ where: { incident_id: id } });
+    
+    console.log('Deleting from IncidentApprovalStatus...');
+    await prisma.IncidentApprovalStatus.deleteMany({ where: { incident_id: id } });
+    
+    console.log('Deleting from UserIncidentMap...');
+    await prisma.UserIncidentMap.deleteMany({ where: { incident_id: id } });
+
+    console.log('===== DELETE SUCCESS =====');
+    res.json({ message: "Incident deleted successfully" });
+  } catch (err) {
+    console.error("===== DELETE ERROR =====");
+    console.error("Delete error:", err);
+    res.status(500).send({ error: "Could not delete incident", details: err.message });
+  }
+});
+
+
 // HOME
 app.get("/", (req, res) => res.json({ message: "Server running" }));
 
@@ -166,6 +216,9 @@ app.get("/usecase/map-danger-zones", async (req, res) => {
 
   res.json(result);
 });
+
+
+
 
 // START SERVER
 const port = process.env.PORT || 4000;

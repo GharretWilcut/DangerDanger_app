@@ -17,6 +17,7 @@ import { useTheme } from '../theme';
 import { BASE_URL, API_ENDPOINTS } from '../config/constants';
 
 export default function AdminScreen({ navigation }) {
+  console.log('===== AdminScreen loaded =====');
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('pending'); // pending, verified, flagged
   const [loading, setLoading] = useState(false);
@@ -38,9 +39,9 @@ export default function AdminScreen({ navigation }) {
       // In a real app, filter by verification status from backend
       let filtered = res.data;
       if (filter === 'pending') {
-        filtered = res.data.filter((r) => !r.verified); // Assume verified field
+        filtered = res.data.filter((r) => !r.approved); // Assume verified field
       } else if (filter === 'verified') {
-        filtered = res.data.filter((r) => r.verified);
+        filtered = res.data.filter((r) => r.approved);
       }
       setReports(filtered);
     } catch (e) {
@@ -52,47 +53,84 @@ export default function AdminScreen({ navigation }) {
   };
 
   const verifyReport = async (reportId) => {
+    console.log('===== verify report pressed =====');
+    console.log('reportId:', reportId);
+    
+    const confirmed = window.confirm('Are you sure you want to verify this report?');
+    
+    if (!confirmed) return;
+    
     try {
       // In a real app, call PATCH /incidents/:id/verify
-      Alert.alert('Success', 'Report verified successfully');
+      // For now, just showing success
+      console.log('Verify API call would go here');
+      window.alert('Report verified successfully');
       loadReports();
     } catch (e) {
-      Alert.alert('Error', 'Failed to verify report');
+      console.error('Verify error:', e);
+      window.alert('Failed to verify report');
     }
   };
-
-  const flagReport = async (reportId, reason) => {
+  const flagReport = async (reportId) => {
+    console.log('===== flag report pressed =====');
+    console.log('reportId:', reportId);
+    
+    const reason = window.prompt('Enter reason for flagging this report:');
+    
+    if (!reason || reason.trim() === '') {
+      console.log('Flag cancelled or no reason provided');
+      return;
+    }
+    
     try {
       // In a real app, call PATCH /incidents/:id/flag with reason
-      Alert.alert('Success', 'Report flagged successfully');
+      console.log('Flag API call would go here with reason:', reason);
+      window.alert('Report flagged successfully');
       loadReports();
-      setModalVisible(false);
     } catch (e) {
-      Alert.alert('Error', 'Failed to flag report');
+      console.error('Flag error:', e);
+      window.alert('Failed to flag report');
     }
   };
 
   const deleteReport = (reportId) => {
-    Alert.alert(
-      'Delete Report',
-      'Are you sure you want to delete this report?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    console.log('===== delete report pressed =====');
+    console.log('reportId:', reportId);
+    
+    // For web compatibility, use window.confirm
+    const confirmed = window.confirm('Are you sure you want to delete this report?');
+    
+    if (confirmed) {
+      handleDelete(reportId);
+    }
+  };
+
+  const handleDelete = async (reportId) => {
+    console.log('===== DELETE CONFIRMED =====');
+    console.log('Attempting to delete reportId:', reportId);
+    console.log('Token:', token ? 'Token exists' : 'NO TOKEN');
+    console.log('URL:', `${BASE_URL}${API_ENDPOINTS.INCIDENTS.BASE}/${reportId}`);
+    
+    try {
+      const response = await axios.delete(
+        `${BASE_URL}${API_ENDPOINTS.INCIDENTS.BASE}/${reportId}`,
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // In a real app, call DELETE /incidents/:id
-              Alert.alert('Success', 'Report deleted');
-              loadReports();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete report');
-            }
-          },
-        },
-      ]
-    );
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log('===== DELETE SUCCESS =====');
+      console.log('Response:', response.data);
+      
+      window.alert('Report deleted successfully');
+      loadReports(); // Refresh the list
+    } catch (e) {
+      console.log('===== DELETE ERROR =====');
+      console.error('Delete error:', e);
+      console.error('Error response:', e.response?.data);
+      console.error('Error status:', e.response?.status);
+      
+      window.alert(e.response?.data?.error || 'Failed to delete report');
+    }
   };
 
   const styles = getStyles(theme);
@@ -111,7 +149,7 @@ export default function AdminScreen({ navigation }) {
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item, theme) }]}>
           <Text style={styles.statusText}>
-            {item.verified ? 'Verified' : 'Pending'}
+            {item.approved ? 'Verified' : 'Pending'}
           </Text>
         </View>
       </View>
@@ -123,7 +161,7 @@ export default function AdminScreen({ navigation }) {
       )}
 
       <View style={styles.reportActions}>
-        {!item.verified && (
+        {!item.approved && (
           <TouchableOpacity
             style={[styles.actionButton, styles.verifyButton]}
             onPress={() => verifyReport(item.id)}
@@ -249,7 +287,7 @@ export default function AdminScreen({ navigation }) {
 }
 
 const getStatusColor = (item, theme) => {
-  if (item.verified) return theme.success;
+  if (item.approved) return theme.success;
   return theme.warning;
 };
 
