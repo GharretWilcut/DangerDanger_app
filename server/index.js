@@ -4,18 +4,13 @@ import cors from "cors";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { db } from "./simple-db.js";
 
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
-
-// TEST DB CONNECTION (optional)
-async function testConnection() {
+// TEST DB CONNECTION
+function testConnection() {
   try {
-    const users = await prisma.UserEmails.findMany();
-    console.log("DB connected. User count =", users.length);
+    const users = db.users.findAll ? db.users.findAll() : [];
+    console.log("✅ Simple DB connected. User count =", users.length);
   } catch (err) {
     console.error("DB Test Failed:", err);
   }
@@ -26,6 +21,12 @@ testConnection();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Error handling middleware (must be last)
+// app.use((err, req, res, next) => {
+//   console.error("Express error middleware:", err);
+//   res.status(500).json({ error: err.message, stack: err.stack });
+// });
 
 const JWT_SECRET = process.env.JWT_SECRET || "replace_in_prod";
 
@@ -45,27 +46,55 @@ function authMiddleware(req, res, next) {
 
 // SIGN-UP
 app.post("/auth/signup", async (req, res) => {
+  // Immediate synchronous logging
+  process.stdout.write("HANDLER CALLED\n");
+  process.stdout.write("Body: " + JSON.stringify(req.body) + "\n");
+  
+  console.log("=== SIGNUP REQUEST ===");
+  console.log("Body:", JSON.stringify(req.body));
   const { email, password, name } = req.body;
-  if (!email || !password)
+  if (!email || !password) {
+    console.log("Missing email or password");
     return res.status(400).send({ error: "email + password required" });
-
-  const passwordHash = await bcrypt.hash(password, 10);
+  }
+  console.log("Starting signup for:", email);
 
   try {
-    const userId = crypto.randomUUID();
+    // Check if user already exists
+    const existing = db.users.findByEmail(email);
+    if (existing) {
+      return res.status(400).send({ error: "Email already registered" });
+    }
 
-    await prisma.UserEmails.create({ data: { user_id: userId, email } });
-    await prisma.UserPasswords.create({
-      data: { user_id: userId, password_hash: passwordHash },
+    const passwordHash = await bcrypt.hash(password, 10);
+    console.log("Password hashed");
+
+    const user = db.users.create({
+      email,
+      passwordHash,
+      name: name || null
     });
-    await prisma.UserNames.create({ data: { user_id: userId, name: name || null } });
-    await prisma.UserCreationTimes.create({ data: { user_id: userId } });
+    console.log("User created:", user.id);
 
-    const token = jwt.sign({ id: userId, email }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: user.id, email }, JWT_SECRET, { expiresIn: "7d" });
+    console.log("Token generated, signup successful!");
     res.json({ token });
   } catch (e) {
-    console.error(e);
-    res.status(500).send({ error: "Could not create user" });
+    console.error("=== SIGNUP ERROR ===");
+    console.error("Message:", e.message);
+    console.error("Code:", e.code);
+    console.error("Name:", e.name);
+    if (e.stack) {
+      console.error("Stack:", e.stack.substring(0, 500));
+    }
+    
+    // Send full error details
+    res.status(500).send({ 
+      error: "Could not create user", 
+      details: e.message,
+      code: e.code,
+      name: e.name
+    });
   }
 });
 
@@ -73,17 +102,13 @@ app.post("/auth/signup", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const emailRecord = await prisma.UserEmails.findUnique({ where: { email } });
-  if (!emailRecord) return res.status(401).send({ error: "Invalid credentials" });
+  const user = db.users.findByEmail(email);
+  if (!user) return res.status(401).send({ error: "Invalid credentials" });
 
-  const passRecord = await prisma.UserPasswords.findUnique({
-    where: { user_id: emailRecord.user_id },
-  });
-
-  const match = await bcrypt.compare(password, passRecord.password_hash);
+  const match = await bcrypt.compare(password, user.passwordHash);
   if (!match) return res.status(401).send({ error: "Invalid credentials" });
 
-  const token = jwt.sign({ id: emailRecord.user_id, email }, JWT_SECRET, {
+  const token = jwt.sign({ id: user.id, email }, JWT_SECRET, {
     expiresIn: "7d",
   });
 
@@ -96,27 +121,18 @@ app.post("/incidents", authMiddleware, async (req, res) => {
   if (!type || lat == null || lng == null)
     return res.status(400).send({ error: "type + lat + lng required" });
 
-  const incidentId = crypto.randomUUID();
-
   try {
-    await prisma.IncidentTypes.create({ data: { incident_id: incidentId, type } });
-    await prisma.IncidentDescriptions.create({
-      data: { incident_id: incidentId, description },
-    });
-    await prisma.IncidentLocations.create({
-      data: { incident_id: incidentId, latitude: lat, longitude: lng },
-    });
-    await prisma.IncidentSeverity.create({
-      data: { incident_id: incidentId, severity },
-    });
-    await prisma.IncidentApprovalStatus.create({
-      data: { incident_id: incidentId, approved: false },
-    });
-    await prisma.UserIncidentMap.create({
-      data: { user_id: req.user.id, incident_id: incidentId },
+    const incident = db.incidents.create({
+      type,
+      description: description || null,
+      latitude: lat,
+      longitude: lng,
+      severity,
+      approved: false,
+      userId: req.user.id
     });
 
-    res.json({ incidentId });
+    res.json({ incidentId: incident.id });
   } catch (err) {
     console.error(err);
     res.status(500).send({ error: "Could not create incident" });
@@ -125,47 +141,39 @@ app.post("/incidents", authMiddleware, async (req, res) => {
 
 // LIST INCIDENTS
 app.get("/incidents", async (req, res) => {
-  const types = await prisma.IncidentTypes.findMany({ take: 50 });
-  const descriptions = await prisma.IncidentDescriptions.findMany();
-  const locs = await prisma.IncidentLocations.findMany();
-  const severity = await prisma.IncidentSeverity.findMany();
-  const status = await prisma.IncidentApprovalStatus.findMany();
-
-  const incidents = types.map((t) => ({
-    id: t.incident_id,
-    type: t.type,
-    description:
-      descriptions.find((d) => d.incident_id === t.incident_id)?.description || null,
-    latitude: locs.find((l) => l.incident_id === t.incident_id)?.latitude || null,
-    longitude: locs.find((l) => l.incident_id === t.incident_id)?.longitude || null,
-    severity: severity.find((s) => s.incident_id === t.incident_id)?.severity || 1,
-    approved: status.find((s) => s.incident_id === t.incident_id)?.approved || false,
-  }));
-
+  const incidents = db.incidents.findAll();
   res.json(incidents);
 });
 
 // HOME
 app.get("/", (req, res) => res.json({ message: "Server running" }));
 
+// MINIMAL TEST
+app.post("/test-simple", (req, res) => {
+  res.json({ message: "Simple test works", body: req.body });
+});
+
+// TEST SIGNUP ROUTE
+app.post("/test-signup", async (req, res) => {
+  console.log("TEST SIGNUP CALLED");
+  res.json({ message: "Test signup route works", body: req.body });
+});
+
 // ZONES USE CASE
 app.get("/usecase/map-danger-zones", async (req, res) => {
-  const locs = await prisma.IncidentLocations.findMany();
-  const types = await prisma.IncidentTypes.findMany();
-  const severity = await prisma.IncidentSeverity.findMany();
-  const status = await prisma.IncidentApprovalStatus.findMany();
-
-  const result = locs.map((loc) => ({
-    id: loc.incident_id,
-    lat: loc.latitude,
-    lng: loc.longitude,
-    type: types.find((t) => t.incident_id === loc.incident_id)?.type || "unknown",
-    severity: severity.find((s) => s.incident_id === loc.incident_id)?.severity || 1,
-    approved: status.find((s) => s.incident_id === loc.incident_id)?.approved || false,
+  const incidents = db.incidents.findAll();
+  const result = incidents.map((inc) => ({
+    id: inc.id,
+    lat: inc.latitude,
+    lng: inc.longitude,
+    type: inc.type || "unknown",
+    severity: inc.severity || 1,
+    approved: inc.approved || false,
   }));
 
   res.json(result);
 });
+
 
 // START SERVER
 const port = process.env.PORT || 4000;

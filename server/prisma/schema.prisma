@@ -1,15 +1,14 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model UserEmails {
   user_id String @id @default(uuid())
-  email   String
+  email   String @unique
 }
 
 model UserPasswords {
