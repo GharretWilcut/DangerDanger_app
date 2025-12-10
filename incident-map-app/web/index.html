@@ -21,6 +21,16 @@
       width: 100%;
       height: 100vh;
     }
+    /* Ensure Leaflet map container renders properly */
+    .leaflet-container {
+      height: 100% !important;
+      width: 100% !important;
+      z-index: 0;
+    }
+    /* Fix for React Native Web View rendering */
+    div[class*="View"] {
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>

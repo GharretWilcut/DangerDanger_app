@@ -7,8 +7,9 @@ import {
   Text,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -33,6 +34,25 @@ function MapClickHandler({ onMapClick }) {
       onMapClick(e.latlng.lat, e.latlng.lng);
     },
   });
+  return null;
+}
+
+// Component to handle map instance for programmatic control
+function MapController({ center, zoom, mapRef }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (mapRef) {
+      mapRef.current = map;
+    }
+  }, [map, mapRef]);
+  
+  useEffect(() => {
+    if (center && zoom !== undefined) {
+      map.setView(center, zoom);
+    }
+  }, [center, zoom, map]);
+  
   return null;
 }
 
@@ -79,9 +99,6 @@ export default function MapScreen({ navigation, route }) {
         const newCenter = [parseFloat(incident.lat), parseFloat(incident.lng)];
         setCenter(newCenter);
         setZoom(15);
-        if (mapRef.current) {
-          mapRef.current.setView(newCenter, 15);
-        }
       }
     }
   }, [route?.params?.incidentId, incidents]);
@@ -148,14 +165,15 @@ export default function MapScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.mapWrapper}>
+      <View style={[styles.mapWrapper, Platform.OS === 'web' && { height: '100vh', minHeight: '100vh' }]}>
         <MapContainer
           center={center}
           zoom={zoom}
           style={{ height: '100%', width: '100%', zIndex: 0 }}
-          whenReady={() => setMapReady(true)}
-          ref={mapRef}
+          whenCreated={() => setMapReady(true)}
+          scrollWheelZoom={true}
         >
+          <MapController center={center} zoom={zoom} mapRef={mapRef} />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -222,9 +240,7 @@ export default function MapScreen({ navigation, route }) {
               const loc = await getCurrentPosition();
               const newCenter = [loc.coords.latitude, loc.coords.longitude];
               setCenter(newCenter);
-              if (mapRef.current) {
-                mapRef.current.setView(newCenter, 13);
-              }
+              setZoom(13);
               loadIncidents(newCenter[0], newCenter[1]);
             } catch (error) {
               Alert.alert('Error', 'Could not get your location');
@@ -369,6 +385,7 @@ const getStyles = (theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      width: '100%',
     },
     mapWrapper: {
       width: '100%',
