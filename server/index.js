@@ -46,10 +46,6 @@ function authMiddleware(req, res, next) {
 
 // SIGN-UP
 app.post("/auth/signup", async (req, res) => {
-  // Immediate synchronous logging
-  process.stdout.write("HANDLER CALLED\n");
-  process.stdout.write("Body: " + JSON.stringify(req.body) + "\n");
-  
   console.log("=== SIGNUP REQUEST ===");
   console.log("Body:", JSON.stringify(req.body));
   const { email, password, name } = req.body;
@@ -69,7 +65,7 @@ app.post("/auth/signup", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     console.log("Password hashed");
 
-    const user = db.users.create({
+    const user = await db.users.create({
       email,
       passwordHash,
       name: name || null
@@ -81,19 +77,20 @@ app.post("/auth/signup", async (req, res) => {
     res.json({ token });
   } catch (e) {
     console.error("=== SIGNUP ERROR ===");
-    console.error("Message:", e.message);
-    console.error("Code:", e.code);
-    console.error("Name:", e.name);
-    if (e.stack) {
-      console.error("Stack:", e.stack.substring(0, 500));
+    console.error("Error object:", e);
+    console.error("Message:", e?.message || String(e));
+    console.error("Code:", e?.code);
+    console.error("Name:", e?.name || e?.constructor?.name);
+    if (e?.stack) {
+      console.error("Stack:", e.stack.substring(0, 1000));
     }
     
     // Send full error details
     res.status(500).send({ 
       error: "Could not create user", 
-      details: e.message,
-      code: e.code,
-      name: e.name
+      details: e?.message || String(e),
+      code: e?.code,
+      name: e?.name || e?.constructor?.name
     });
   }
 });
@@ -122,7 +119,7 @@ app.post("/incidents", authMiddleware, async (req, res) => {
     return res.status(400).send({ error: "type + lat + lng required" });
 
   try {
-    const incident = db.incidents.create({
+    const incident = await db.incidents.create({
       type,
       description: description || null,
       latitude: lat,
