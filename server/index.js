@@ -90,11 +90,20 @@ app.post("/auth/login", async (req, res) => {
   res.json({ token });
 });
 
-// CREATE INCIDENT
 app.post("/incidents", authMiddleware, async (req, res) => {
-  const { type, description, lat, lng, severity = 1 } = req.body;
-  if (!type || lat == null || lng == null)
-    return res.status(400).send({ error: "type + lat + lng required" });
+  console.log("RAW BODY:", req.body);   // <-- SEE WHAT FRONTEND SENT
+
+  let { type, description, lat, lng, severity = 1 } = req.body;
+
+  // Force into numbers
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+
+  console.log("Parsed coordinates:", { latitude, longitude }); // <-- CONFIRM THEY ARE NUMBERS
+
+  if (!type || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    return res.status(400).send({ error: "type + lat + lng required (must be numbers)" });
+  }
 
   const incidentId = crypto.randomUUID();
 
@@ -104,7 +113,11 @@ app.post("/incidents", authMiddleware, async (req, res) => {
       data: { incident_id: incidentId, description },
     });
     await prisma.IncidentLocations.create({
-      data: { incident_id: incidentId, latitude: lat, longitude: lng },
+      data: {
+        incident_id: incidentId,
+        latitude,     // <-- NOW NUMBERS
+        longitude,    // <-- NOW NUMBERS
+      },
     });
     await prisma.IncidentSeverity.create({
       data: { incident_id: incidentId, severity },
@@ -122,6 +135,7 @@ app.post("/incidents", authMiddleware, async (req, res) => {
     res.status(500).send({ error: "Could not create incident" });
   }
 });
+
 
 // LIST INCIDENTS
 app.get("/incidents", async (req, res) => {

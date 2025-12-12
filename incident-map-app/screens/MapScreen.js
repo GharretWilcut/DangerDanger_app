@@ -181,24 +181,35 @@ export default function MapScreen({ navigation, route }) {
           />
           <MapClickHandler onMapClick={onMapClick} />
           
-          {filteredIncidents.map((inc) => (
-            <Marker
-              key={inc.id}
-              position={[parseFloat(inc.lat), parseFloat(inc.lng)]}
-              icon={createCustomIcon(inc.type)}
-              eventHandlers={{
-                click: () => setSelectedIncident(inc),
-              }}
-            >
-              <Popup>
-                <div style={{ minWidth: '150px' }}>
-                  <strong>{inc.type}</strong>
-                  <br />
-                  {inc.description && <span>{inc.description.substring(0, 50)}...</span>}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {filteredIncidents.map((inc) => {
+            console.log(
+              "INCIDENT:",
+              inc.id,
+              "lat:", inc.latitude,
+              "lng:", inc.longitude,
+              "parsed:", parseFloat(inc.latitude), parseFloat(inc.longitude)
+            );
+
+            return (
+              <Marker
+                key={inc.id}
+                position={[parseFloat(inc.latitude), parseFloat(inc.longitude)]}
+                icon={createCustomIcon(inc.type)}
+                eventHandlers={{
+                  click: () => setSelectedIncident(inc),
+                }}
+              >
+                <Popup>
+                  <div style={{ minWidth: '150px' }}>
+                    <strong>{inc.type}</strong>
+                    <br />
+                    {inc.description && <span>{inc.description.substring(0, 50)}...</span>}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
           
           {showSafeRoutes && (
             <Circle
