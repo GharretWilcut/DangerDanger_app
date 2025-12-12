@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Modal,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -21,8 +19,6 @@ export default function AdminScreen({ navigation }) {
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('pending'); // pending, verified, flagged
   const [loading, setLoading] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
   const { token } = useContext(AuthContext);
   const theme = useTheme();
 
@@ -36,13 +32,19 @@ export default function AdminScreen({ navigation }) {
       const res = await axios.get(`${BASE_URL}${API_ENDPOINTS.INCIDENTS.BASE}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // In a real app, filter by verification status from backend
+      
       let filtered = res.data;
       if (filter === 'pending') {
-        filtered = res.data.filter((r) => !r.approved); // Assume verified field
+        // Pending: not approved and not flagged
+        filtered = res.data.filter((r) => !r.approved && !r.flagged);
       } else if (filter === 'verified') {
+        // Verified: approved
         filtered = res.data.filter((r) => r.approved);
+      } else if (filter === 'flagged') {
+        // Flagged: explicitly flagged
+        filtered = res.data.filter((r) => r.flagged);
       }
+      
       setReports(filtered);
     } catch (e) {
       console.warn('Failed to load reports', e);
@@ -61,16 +63,24 @@ export default function AdminScreen({ navigation }) {
     if (!confirmed) return;
     
     try {
-      // In a real app, call PATCH /incidents/:id/verify
-      // For now, just showing success
-      console.log('Verify API call would go here');
+      console.log('Making PATCH request to verify...');
+      const response = await axios.patch(
+        `${BASE_URL}${API_ENDPOINTS.INCIDENTS.BASE}/${reportId}/verify`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log('Verify success:', response.data);
       window.alert('Report verified successfully');
       loadReports();
     } catch (e) {
       console.error('Verify error:', e);
-      window.alert('Failed to verify report');
+      console.error('Error response:', e.response?.data);
+      window.alert(e.response?.data?.error || 'Failed to verify report');
     }
   };
+
   const flagReport = async (reportId) => {
     console.log('===== flag report pressed =====');
     console.log('reportId:', reportId);
@@ -83,13 +93,21 @@ export default function AdminScreen({ navigation }) {
     }
     
     try {
-      // In a real app, call PATCH /incidents/:id/flag with reason
-      console.log('Flag API call would go here with reason:', reason);
+      console.log('Making PATCH request to flag...');
+      const response = await axios.patch(
+        `${BASE_URL}${API_ENDPOINTS.INCIDENTS.BASE}/${reportId}/flag`,
+        { reason },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log('Flag success:', response.data);
       window.alert('Report flagged successfully');
       loadReports();
     } catch (e) {
       console.error('Flag error:', e);
-      window.alert('Failed to flag report');
+      console.error('Error response:', e.response?.data);
+      window.alert(e.response?.data?.error || 'Failed to flag report');
     }
   };
 
@@ -97,7 +115,6 @@ export default function AdminScreen({ navigation }) {
     console.log('===== delete report pressed =====');
     console.log('reportId:', reportId);
     
-    // For web compatibility, use window.confirm
     const confirmed = window.confirm('Are you sure you want to delete this report?');
     
     if (confirmed) {
@@ -122,7 +139,7 @@ export default function AdminScreen({ navigation }) {
       console.log('Response:', response.data);
       
       window.alert('Report deleted successfully');
-      loadReports(); // Refresh the list
+      loadReports();
     } catch (e) {
       console.log('===== DELETE ERROR =====');
       console.error('Delete error:', e);
@@ -172,10 +189,7 @@ export default function AdminScreen({ navigation }) {
         )}
         <TouchableOpacity
           style={[styles.actionButton, styles.flagButton]}
-          onPress={() => {
-            setSelectedReport(item);
-            setModalVisible(true);
-          }}
+          onPress={() => flagReport(item.id)}
         >
           <Ionicons name="flag" size={18} color={theme.warning} />
           <Text style={[styles.actionText, { color: theme.warning }]}>Flag</Text>
@@ -241,47 +255,6 @@ export default function AdminScreen({ navigation }) {
           </View>
         }
       />
-
-      {/* Flag Modal */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Flag Report
-            </Text>
-            <TextInput
-              style={[styles.modalInput, { color: theme.text, borderColor: theme.border }]}
-              placeholder="Reason for flagging..."
-              placeholderTextColor={theme.textSecondary}
-              multiline
-              numberOfLines={4}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={() => {
-                  if (selectedReport) {
-                    flagReport(selectedReport.id, 'Flagged by admin');
-                  }
-                }}
-              >
-                <Text style={[styles.modalButtonText, { color: '#fff' }]}>Flag</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -426,56 +399,5 @@ const getStyles = (theme) =>
       marginTop: 16,
       fontSize: 16,
       color: theme.textSecondary,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      width: '100%',
-      borderRadius: 12,
-      padding: 20,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 5,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 16,
-    },
-    modalInput: {
-      borderWidth: 1,
-      borderRadius: 8,
-      padding: 12,
-      marginBottom: 16,
-      minHeight: 100,
-      textAlignVertical: 'top',
-    },
-    modalActions: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      gap: 12,
-    },
-    modalButton: {
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 8,
-    },
-    cancelButton: {
-      backgroundColor: theme.background,
-    },
-    submitButton: {
-      backgroundColor: theme.warning,
-    },
-    modalButtonText: {
-      fontSize: 16,
-      fontWeight: '500',
-      color: theme.text,
     },
   });

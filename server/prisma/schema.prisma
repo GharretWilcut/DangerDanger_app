@@ -51,6 +51,7 @@ model IncidentSeverity {
 model IncidentApprovalStatus {
   incident_id String  @id @default(uuid())
   approved    Boolean @default(false)
+  flagged     Boolean @default(false)  // Add this line
 }
 
 /// User → Incident relationship

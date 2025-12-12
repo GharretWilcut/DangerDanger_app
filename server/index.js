@@ -140,6 +140,7 @@ app.get("/incidents", async (req, res) => {
     longitude: locs.find((l) => l.incident_id === t.incident_id)?.longitude || null,
     severity: severity.find((s) => s.incident_id === t.incident_id)?.severity || 1,
     approved: status.find((s) => s.incident_id === t.incident_id)?.approved || false,
+    flagged: status.find((s) => s.incident_id === t.incident_id)?.flagged || false,  // Add this
   }));
 
   res.json(incidents);
@@ -194,6 +195,82 @@ app.delete("/incidents/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// VERIFY INCIDENT
+// VERIFY INCIDENT
+app.patch("/incidents/:id/verify", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  
+  console.log('===== VERIFY REQUEST RECEIVED =====');
+  console.log('Incident ID to verify:', id);
+  console.log('User ID:', req.user.id);
+
+  try {
+    // Check if incident exists
+    const existingStatus = await prisma.IncidentApprovalStatus.findUnique({
+      where: { incident_id: id }
+    });
+    
+    if (!existingStatus) {
+      console.log('Incident not found');
+      return res.status(404).send({ error: "Incident not found" });
+    }
+
+    // Update approval status to true and clear flagged
+    await prisma.IncidentApprovalStatus.update({
+      where: { incident_id: id },
+      data: { 
+        approved: true,
+        flagged: false  // Add this to clear flag when verified
+      }
+    });
+
+    console.log('===== VERIFY SUCCESS =====');
+    res.json({ message: "Incident verified successfully", approved: true, flagged: false });
+  } catch (err) {
+    console.error("===== VERIFY ERROR =====");
+    console.error("Verify error:", err);
+    res.status(500).send({ error: "Could not verify incident", details: err.message });
+  }
+});
+
+// FLAG INCIDENT
+app.patch("/incidents/:id/flag", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  console.log('===== FLAG REQUEST RECEIVED =====');
+  console.log('Incident ID to flag:', id);
+  console.log('Flag reason:', reason);
+  console.log('User ID:', req.user.id);
+
+  try {
+    // Check if incident exists
+    const existingStatus = await prisma.IncidentApprovalStatus.findUnique({
+      where: { incident_id: id }
+    });
+    
+    if (!existingStatus) {
+      console.log('Incident not found');
+      return res.status(404).send({ error: "Incident not found" });
+    }
+
+    // Update to flagged and not approved
+    await prisma.IncidentApprovalStatus.update({
+      where: { incident_id: id },
+      data: { 
+        approved: false,
+        flagged: true  // Add this
+      }
+    });
+
+    console.log('===== FLAG SUCCESS =====');
+    res.json({ message: "Incident flagged successfully", approved: false, flagged: true, reason });
+  } catch (err) {
+    console.error("===== FLAG ERROR =====");
+    console.error("Flag error:", err);
+    res.status(500).send({ error: "Could not flag incident", details: err.message });
+  }
+});
 
 // HOME
 app.get("/", (req, res) => res.json({ message: "Server running" }));
