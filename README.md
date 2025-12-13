@@ -151,6 +151,8 @@ Key dependencies:
 - `react-native-web`: React Native components for web
 - `axios`: HTTP client
 - `@expo/vector-icons`: Icon library
+- `@react-navigation/stack`
+
 
 ## Development Notes
 

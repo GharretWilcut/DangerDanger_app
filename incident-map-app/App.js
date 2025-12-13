@@ -1,9 +1,13 @@
 import React, { useState, useEffect, createContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
+import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { storage } from './utils/storage';
+import 'leaflet/dist/leaflet.css';
+
 
 // Screens
 import MapScreen from './screens/MapScreen';
@@ -19,7 +23,10 @@ import { useTheme } from './theme';
 
 export const AuthContext = createContext();
 
-const Stack = createNativeStackNavigator();
+const Stack = Platform.OS === 'web'
+  ? createStackNavigator()
+  : createNativeStackNavigator();
+
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
@@ -96,7 +103,9 @@ export default function App() {
   return (
     <AuthContext.Provider value={auth}>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator screenOptions={{ headerShown: false,
+          animationEnabled: Platform.OS !== 'web',
+         }}>
           {!token ? (
             <>
               <Stack.Screen name="Login" component={LoginScreen} />
