@@ -31,7 +31,7 @@ function MapClickHandler({ onMapClick }) {
   useMapEvents({
     contextmenu: (e) => {
       // Right-click for web (equivalent to long press on mobile)
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      onMapClick(e.latlng.latitude, e.latlng.longitude);
     },
   });
   return null;
@@ -96,7 +96,7 @@ export default function MapScreen({ navigation, route }) {
       const incident = incidents.find((inc) => inc.id === route.params.incidentId);
       if (incident) {
         setSelectedIncident(incident);
-        const newCenter = [parseFloat(incident.lat), parseFloat(incident.lng)];
+        const newCenter = [parseFloat(incident.latitude), parseFloat(incident.longitude)];
         setCenter(newCenter);
         setZoom(15);
       }
