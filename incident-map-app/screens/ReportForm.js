@@ -104,6 +104,7 @@ export default function ReportForm({ route, navigation }) {
       // Close the modal first
       navigation.goBack();
       
+      
       // Then show success alert
       setTimeout(() => {
         Alert.alert('Success', 'Report submitted successfully!');

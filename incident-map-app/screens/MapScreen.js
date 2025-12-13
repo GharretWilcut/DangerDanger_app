@@ -19,6 +19,7 @@ import {
 } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 
 import { requestLocationPermission, getCurrentPosition } from '../utils/geolocation';
@@ -27,7 +28,7 @@ import { useTheme } from '../theme';
 import { BASE_URL, API_ENDPOINTS } from '../config/constants';
 
 /* ===========================
-   Leaflet marker icon fix
+   Leaflet marker icon fix & custom icons
 =========================== */
 delete Icon.Default.prototype._getIconUrl;
 Icon.Default.mergeOptions({
@@ -38,6 +39,33 @@ Icon.Default.mergeOptions({
   shadowUrl:
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
+
+// Create custom colored marker icons for different incident types
+const createCustomIcon = (color) => {
+  return new Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+};
+
+// Define icons for each incident type
+const incidentIcons = {
+  crash: createCustomIcon('red'),
+  crime: createCustomIcon('violet'),
+  fire: createCustomIcon('orange'),
+  flood: createCustomIcon('blue'),
+  other: createCustomIcon('grey'),
+  default: createCustomIcon('gold')
+};
+
+// Helper to get the appropriate icon for an incident
+const getIncidentIcon = (type) => {
+  return incidentIcons[type?.toLowerCase()] || incidentIcons.default;
+};
 
 /* ===========================
    Helpers
@@ -97,6 +125,7 @@ function MapController({ center, zoom, mapRef }) {
 export default function MapScreen({ navigation, route }) {
   const theme = useTheme();
   const auth = useContext(AuthContext);
+  const isFocused = useIsFocused(); // Add this hook
 
   const [center, setCenter] = useState([37.78825, -122.4324]);
   const [zoom, setZoom] = useState(13);
@@ -129,6 +158,15 @@ export default function MapScreen({ navigation, route }) {
       }
     })();
   }, []);
+
+  /* ===========================
+     Reload incidents when screen comes into focus
+  =========================== */
+  useEffect(() => {
+    if (isFocused) {
+      loadIncidents(center[0], center[1]);
+    }
+  }, [isFocused]);
 
   /* ===========================
      Route-based centering
@@ -195,6 +233,7 @@ export default function MapScreen({ navigation, route }) {
               <Marker
                 key={inc.id}
                 position={latlng}
+                icon={getIncidentIcon(inc.type)}
                 eventHandlers={{ click: () => setSelectedIncident(inc) }}
               >
                 <Popup>
