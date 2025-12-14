@@ -1,7 +1,6 @@
-// eslint.config.js
-const js = require('@eslint/js');
+import js from '@eslint/js';
 
-module.exports = [
+export default [
   js.configs.recommended,
   {
     ignores: [
@@ -13,7 +12,7 @@ module.exports = [
     files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2021,
-      sourceType: 'commonjs',
+      sourceType: 'module',
       globals: {
         // Node globals
         console: 'readonly',
@@ -29,6 +28,7 @@ module.exports = [
         clearTimeout: 'readonly',
         clearInterval: 'readonly',
         global: 'readonly',
+
         // Jest
         describe: 'readonly',
         it: 'readonly',
@@ -41,7 +41,7 @@ module.exports = [
       },
     },
     rules: {
-      'no-console': 'off', // Console is fine in server
+      'no-console': 'off',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
