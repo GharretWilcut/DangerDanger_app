@@ -1,11 +1,9 @@
-module.exports = {
+export default {
   env: {
-    node: true,     // Node globals like require, process
+    node: true,
     es2021: true,
-    jest: true,     // For tests
+    jest: true,
   },
   extends: ["eslint:recommended"],
-  rules: {
-    // add or override server-specific rules if needed
-  },
+  rules: {},
 };
