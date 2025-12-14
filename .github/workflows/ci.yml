@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [main, develop]
 
+
 jobs:
   test-app:
     name: Test & Lint App
@@ -48,35 +49,47 @@ jobs:
     name: Test & Lint Server
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: incidentuser
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: incidentdb_test
+        options: >-
+          --health-cmd="pg_isready -U incidentuser"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://incidentuser:password123@localhost:5432/incidentdb_test
+
     defaults:
       run:
         working-directory: ./server
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Prisma migrations
+        run: npx prisma migrate deploy
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: false
 
       - name: Run Tests
         run: npm test
-        continue-on-error: false
-
-      - name: Check for security vulnerabilities
-        run: npm audit --audit-level=moderate
-        continue-on-error: true

@@ -9,17 +9,17 @@ datasource db {
 
 model UserEmails {
   user_id String @id @default(uuid())
-  email   String
+  email   String @unique
 }
 
 model UserPasswords {
   user_id       String @id @default(uuid())
-  password_hash String
+  password_hash String @unique
 }
 
 model UserNames {
   user_id String  @id @default(uuid())
-  name    String?
+  name    String? @unique
 }
 
 model UserCreationTimes {
