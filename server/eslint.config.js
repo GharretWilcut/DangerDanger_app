@@ -1,7 +1,7 @@
 // eslint.config.js
-import js from '@eslint/js';
+const js = require('@eslint/js');
 
-export default [
+module.exports = [
   js.configs.recommended,
   {
     ignores: [
@@ -13,17 +13,23 @@ export default [
     files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2021,
-      sourceType: 'module', // Changed to 'module' for ES modules
+      sourceType: 'commonjs',
       globals: {
+        // Node globals
         console: 'readonly',
         process: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
         Buffer: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',
         clearTimeout: 'readonly',
         clearInterval: 'readonly',
+        global: 'readonly',
+        // Jest
         describe: 'readonly',
         it: 'readonly',
         expect: 'readonly',
@@ -35,7 +41,7 @@ export default [
       },
     },
     rules: {
-      'no-console': 'off',
+      'no-console': 'off', // Console is fine in server
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
