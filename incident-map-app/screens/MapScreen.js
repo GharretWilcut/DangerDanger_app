@@ -6,106 +6,192 @@ import {
   TouchableOpacity,
   Text,
   Modal,
-  ScrollView,
   Platform,
 } from 'react-native';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Circle,
+  useMapEvents,
+  useMap,
+} from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
+
 import { requestLocationPermission, getCurrentPosition } from '../utils/geolocation';
 import { AuthContext } from '../App';
 import { useTheme } from '../theme';
 import { BASE_URL, API_ENDPOINTS } from '../config/constants';
 
-// Fix for default marker icons in react-leaflet
+/* ===========================
+   Leaflet marker icon fix & custom icons
+=========================== */
 delete Icon.Default.prototype._getIconUrl;
 Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconRetinaUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Component to handle map click events
+// Create custom colored marker icons for different incident types
+const createCustomIcon = (color) => {
+  return new Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+};
+
+// Define icons for each incident type
+const incidentIcons = {
+  crash: createCustomIcon('red'),
+  crime: createCustomIcon('violet'),
+  fire: createCustomIcon('orange'),
+  flood: createCustomIcon('blue'),
+  other: createCustomIcon('grey'),
+  default: createCustomIcon('gold')
+};
+
+// Helper to get the appropriate icon for an incident
+const getIncidentIcon = (type) => {
+  return incidentIcons[type?.toLowerCase()] || incidentIcons.default;
+};
+
+/* ===========================
+   Helpers
+=========================== */
+const toLatLng = (obj) => {
+  const lat = parseFloat(obj?.latitude);
+  const lng = parseFloat(obj?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return [lat, lng];
+};
+
+/* ===========================
+   Map click handler
+=========================== */
 function MapClickHandler({ onMapClick }) {
   useMapEvents({
     contextmenu: (e) => {
-      // Right-click for web (equivalent to long press on mobile)
-      onMapClick(e.latlng.latitude, e.latlng.longitude);
+      onMapClick(e.latlng.lat, e.latlng.lng);
     },
   });
   return null;
 }
 
-// Component to handle map instance for programmatic control
+/* ===========================
+   Map controller
+=========================== */
 function MapController({ center, zoom, mapRef }) {
   const map = useMap();
-  
+
   useEffect(() => {
-    if (mapRef) {
-      mapRef.current = map;
-    }
-  }, [map, mapRef]);
-  
+    mapRef.current = map;
+
+    // 🔑 Fix tile misalignment (wait for layout + paint)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        map.invalidateSize(true);
+      });
+    });
+  }, [map]);
+
   useEffect(() => {
-    if (center && zoom !== undefined) {
+    if (
+      Array.isArray(center) &&
+      Number.isFinite(center[0]) &&
+      Number.isFinite(center[1])
+    ) {
       map.setView(center, zoom);
     }
   }, [center, zoom, map]);
-  
+
   return null;
 }
 
+/* ===========================
+   Screen
+=========================== */
 export default function MapScreen({ navigation, route }) {
-  const [center, setCenter] = useState([37.78825, -122.4324]); // Default location
+  const theme = useTheme();
+  const auth = useContext(AuthContext);
+  const isFocused = useIsFocused(); // Add this hook
+
+  const [center, setCenter] = useState([37.78825, -122.4324]);
   const [zoom, setZoom] = useState(13);
   const [incidents, setIncidents] = useState([]);
   const [filter, setFilter] = useState('all');
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showSafeRoutes, setShowSafeRoutes] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  const auth = useContext(AuthContext);
-  const theme = useTheme();
+
   const mapRef = useRef(null);
 
+  /* ===========================
+     Load location + incidents
+  =========================== */
   useEffect(() => {
     (async () => {
       try {
         const { status } = await requestLocationPermission();
         if (status !== 'granted') {
-          Alert.alert('Permission required', 'Location permission needed to show nearby incidents.');
-          // Use default location
           loadIncidents(center[0], center[1]);
           return;
         }
+
         const loc = await getCurrentPosition();
         const newCenter = [loc.coords.latitude, loc.coords.longitude];
         setCenter(newCenter);
         loadIncidents(newCenter[0], newCenter[1]);
-      } catch (error) {
-        console.warn('Location error:', error);
-        Alert.alert('Location Error', 'Could not get your location. Using default location.');
+      } catch {
         loadIncidents(center[0], center[1]);
       }
     })();
   }, []);
 
+  /* ===========================
+     Reload incidents when screen comes into focus
+  =========================== */
   useEffect(() => {
-    if (route?.params?.incidentId) {
-      const incident = incidents.find((inc) => inc.id === route.params.incidentId);
-      if (incident) {
-        setSelectedIncident(incident);
-        const newCenter = [parseFloat(incident.latitude), parseFloat(incident.longitude)];
-        setCenter(newCenter);
-        setZoom(15);
-      }
+    if (isFocused) {
+      loadIncidents(center[0], center[1]);
     }
+  }, [isFocused]);
+
+  /* ===========================
+     Route-based centering
+  =========================== */
+  useEffect(() => {
+    if (!route?.params?.incidentId) return;
+
+    const incident = incidents.find(
+      (i) => i.id === route.params.incidentId
+    );
+    if (!incident) return;
+
+    const latlng = toLatLng(incident);
+    if (!latlng) return;
+
+    setSelectedIncident(incident);
+    setCenter(latlng);
+    setZoom(15);
   }, [route?.params?.incidentId, incidents]);
 
   const loadIncidents = async (lat, lng) => {
     try {
-      const res = await axios.get(`${BASE_URL}${API_ENDPOINTS.INCIDENTS.GET_NEARBY(lat, lng)}`);
+      const res = await axios.get(
+        `${BASE_URL}${API_ENDPOINTS.INCIDENTS.GET_NEARBY(lat, lng)}`
+      );
       setIncidents(res.data);
     } catch (e) {
       console.warn('loadIncidents', e);
@@ -116,101 +202,49 @@ export default function MapScreen({ navigation, route }) {
     navigation.navigate('Report', { lat, lng });
   };
 
-  const getMarkerColor = (type) => {
-    const colors = {
-      crash: theme.error,
-      crime: theme.danger,
-      fire: theme.warning,
-      flood: theme.secondary,
-      default: theme.primary,
-    };
-    return colors[type?.toLowerCase()] || colors.default;
-  };
-
-  const getMarkerIcon = (type) => {
-    const icons = {
-      crash: 'car',
-      crime: 'shield',
-      fire: 'flame',
-      flood: 'water',
-      default: 'alert-circle',
-    };
-    return icons[type?.toLowerCase()] || icons.default;
-  };
-
-  const createCustomIcon = (type) => {
-    const color = getMarkerColor(type);
-    
-    return new Icon({
-      iconUrl: `data:image/svg+xml;base64,${btoa(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="16" fill="${color}" stroke="white" stroke-width="2"/>
-          <circle cx="18" cy="18" r="8" fill="white" opacity="0.3"/>
-        </svg>
-      `)}`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 36],
-      popupAnchor: [0, -36],
-    });
-  };
-
-  const filteredIncidents = incidents.filter((inc) => {
-    if (filter === 'all') return true;
-    return inc.type?.toLowerCase() === filter.toLowerCase();
-  });
-
-  const incidentTypes = ['all', 'crash', 'crime', 'fire', 'flood'];
-
   const styles = getStyles(theme);
 
+  /* ===========================
+     Render
+  =========================== */
   return (
     <View style={styles.container}>
-      <View style={[styles.mapWrapper, Platform.OS === 'web' && { height: '100vh', minHeight: '100vh' }]}>
+      <View style={styles.mapWrapper}>
         <MapContainer
           center={center}
           zoom={zoom}
-          style={{ height: '100%', width: '100%', zIndex: 0 }}
-          whenCreated={() => setMapReady(true)}
-          scrollWheelZoom={true}
+          scrollWheelZoom
+          style={{ height: '100%', width: '100%' }}
         >
           <MapController center={center} zoom={zoom} mapRef={mapRef} />
+
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            subdomains={['a', 'b', 'c']}
+            attribution="&copy; OpenStreetMap contributors"
           />
+
           <MapClickHandler onMapClick={onMapClick} />
-          
-          {filteredIncidents.map((inc) => {
-            console.log(
-              "INCIDENT:",
-              inc.id,
-              "lat:", inc.latitude,
-              "lng:", inc.longitude,
-              "parsed:", parseFloat(inc.latitude), parseFloat(inc.longitude)
-            );
+
+          {incidents.map((inc) => {
+            const latlng = toLatLng(inc);
+            if (!latlng) return null;
 
             return (
               <Marker
                 key={inc.id}
-                position={[parseFloat(inc.latitude), parseFloat(inc.longitude)]}
-                icon={createCustomIcon(inc.type)}
-                eventHandlers={{
-                  click: () => setSelectedIncident(inc),
-                }}
+                position={latlng}
+                icon={getIncidentIcon(inc.type)}
+                eventHandlers={{ click: () => setSelectedIncident(inc) }}
               >
                 <Popup>
-                  <div style={{ minWidth: '150px' }}>
-                    <strong>{inc.type}</strong>
-                    <br />
-                    {inc.description && <span>{inc.description.substring(0, 50)}...</span>}
-                  </div>
+                  <strong>{inc.type}</strong>
+                  <br />
+                  {inc.description}
                 </Popup>
               </Marker>
             );
           })}
 
-          
           {showSafeRoutes && (
             <Circle
               center={center}
@@ -219,302 +253,26 @@ export default function MapScreen({ navigation, route }) {
                 color: theme.success,
                 fillColor: theme.success,
                 fillOpacity: 0.3,
-                weight: 2,
               }}
             />
           )}
         </MapContainer>
       </View>
-
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={() => setShowFilters(!showFilters)}
-        >
-          <Ionicons name="filter" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={() => setShowSafeRoutes(!showSafeRoutes)}
-        >
-          <Ionicons
-            name={showSafeRoutes ? 'shield-checkmark' : 'shield-outline'}
-            size={24}
-            color={theme.text}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={async () => {
-            try {
-              const loc = await getCurrentPosition();
-              const newCenter = [loc.coords.latitude, loc.coords.longitude];
-              setCenter(newCenter);
-              setZoom(13);
-              loadIncidents(newCenter[0], newCenter[1]);
-            } catch (error) {
-              Alert.alert('Error', 'Could not get your location');
-            }
-          }}
-        >
-          <Ionicons name="locate" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={() => {
-            if (center) {
-              loadIncidents(center[0], center[1]);
-            }
-          }}
-        >
-          <Ionicons name="refresh" size={24} color={theme.text} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Filter Modal */}
-      <Modal visible={showFilters} transparent animationType="slide">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowFilters(false)}
-        >
-          <View style={[styles.filterModal, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.filterTitle, { color: theme.text }]}>Filter by Type</Text>
-            {incidentTypes.map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.filterOption,
-                  filter === type && { backgroundColor: theme.primary },
-                ]}
-                onPress={() => {
-                  setFilter(type);
-                  setShowFilters(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.filterOptionText,
-                    { color: filter === type ? '#fff' : theme.text },
-                  ]}
-                >
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </Text>
-                {filter === type && (
-                  <Ionicons name="checkmark" size={20} color="#fff" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Incident Detail Modal */}
-      <Modal
-        visible={!!selectedIncident}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedIncident(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.detailModal, { backgroundColor: theme.surface }]}>
-            {selectedIncident && (
-              <>
-                <View style={styles.detailHeader}>
-                  <View
-                    style={[
-                      styles.typeIcon,
-                      { backgroundColor: getMarkerColor(selectedIncident.type) },
-                    ]}
-                  >
-                    <Ionicons
-                      name={getMarkerIcon(selectedIncident.type)}
-                      size={24}
-                      color="#fff"
-                    />
-                  </View>
-                  <View style={styles.detailTitleContainer}>
-                    <Text style={[styles.detailTitle, { color: theme.text }]}>
-                      {selectedIncident.type}
-                    </Text>
-                    <Text style={[styles.detailTime, { color: theme.textSecondary }]}>
-                      {new Date(selectedIncident.created_at).toLocaleString()}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setSelectedIncident(null)}>
-                    <Ionicons name="close" size={24} color={theme.text} />
-                  </TouchableOpacity>
-                </View>
-                {selectedIncident.description && (
-                  <Text style={[styles.detailDescription, { color: theme.text }]}>
-                    {selectedIncident.description}
-                  </Text>
-                )}
-                {selectedIncident.severity && (
-                  <View style={styles.severityContainer}>
-                    <Text style={[styles.severityLabel, { color: theme.textSecondary }]}>
-                      Severity:
-                    </Text>
-                    <View style={styles.severityBar}>
-                      {[1, 2, 3, 4, 5].map((level) => (
-                        <View
-                          key={level}
-                          style={[
-                            styles.severityDot,
-                            level <= selectedIncident.severity && {
-                              backgroundColor: theme.danger,
-                            },
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[styles.reportButton, { backgroundColor: theme.primary }]}
-                  onPress={() => {
-                    setSelectedIncident(null);
-                    navigation.navigate('Report', {
-                      lat: selectedIncident.lat,
-                      lng: selectedIncident.lng,
-                    });
-                  }}
-                >
-                  <Text style={styles.reportButtonText}>Report Similar Incident</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
+/* ===========================
+   Styles (FIXED)
+=========================== */
 const getStyles = (theme) =>
   StyleSheet.create({
     container: {
-      flex: 1,
       width: '100%',
+      ...(Platform.OS === 'web' ? { height: '100vh' } : { flex: 1 }),
     },
     mapWrapper: {
       width: '100%',
-      height: '100%',
-      position: 'relative',
-    },
-    controls: {
-      position: 'absolute',
-      right: 16,
-      top: 60,
-      gap: 8,
-      zIndex: 1000,
-    },
-    controlButton: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: theme.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'flex-end',
-    },
-    filterModal: {
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      padding: 20,
-      paddingBottom: 40,
-    },
-    filterTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 16,
-    },
-    filterOption: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 8,
-      backgroundColor: theme.background,
-    },
-    filterOptionText: {
-      fontSize: 16,
-      fontWeight: '500',
-    },
-    detailModal: {
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      padding: 20,
-      maxHeight: '60%',
-    },
-    detailHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    typeIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    detailTitleContainer: {
-      flex: 1,
-    },
-    detailTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      textTransform: 'capitalize',
-      marginBottom: 4,
-    },
-    detailTime: {
-      fontSize: 12,
-    },
-    detailDescription: {
-      fontSize: 14,
-      lineHeight: 20,
-      marginBottom: 16,
-    },
-    severityContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    severityLabel: {
-      fontSize: 14,
-      marginRight: 8,
-    },
-    severityBar: {
-      flexDirection: 'row',
-      gap: 4,
-    },
-    severityDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: theme.border,
-    },
-    reportButton: {
-      padding: 16,
-      borderRadius: 12,
-      alignItems: 'center',
-    },
-    reportButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: 'bold',
+      ...(Platform.OS === 'web' ? { height: '100vh' } : { flex: 1 }),
     },
   });

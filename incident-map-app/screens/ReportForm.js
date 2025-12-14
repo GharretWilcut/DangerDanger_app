@@ -93,9 +93,17 @@ export default function ReportForm({ route, navigation }) {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      
+      // helper function to go to map
+      const goToMap = () => {
+        navigation.navigate('MainTabs', {
+          screen: 'Map',
+          params: { selectLocation: true },
+        });
+      };
+
       // Close the modal first
       navigation.goBack();
+      
       
       // Then show success alert
       setTimeout(() => {
@@ -217,7 +225,10 @@ export default function ReportForm({ route, navigation }) {
           )}
           <TouchableOpacity
             style={styles.mapButton}
-            onPress={() => navigation.navigate('Map', { selectLocation: true })}
+            onPress={() => navigation.navigate('MainTabs', {
+              screen: 'Map',
+              params: { selectLocation: true },
+            })}
           >
             <Ionicons name="map" size={20} color={theme.secondary} />
             <Text style={styles.mapButtonText}>Select on Map</Text>
