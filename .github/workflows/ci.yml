@@ -1,0 +1,79 @@
+name: CI - Test & Lint
+
+on:
+  push:
+    branches: ['**'] # Run on all branches
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-app:
+    name: Test & Lint App
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./incident-map-app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './app/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: Run Prettier check
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: Run Tests
+        run: npm test
+
+      - name: Check for security vulnerabilities
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+  test-server:
+    name: Test & Lint Server
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./server
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './server/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: false
+
+      - name: Check for security vulnerabilities
+        run: npm audit --audit-level=moderate
+        continue-on-error: true

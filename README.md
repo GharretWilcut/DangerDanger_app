@@ -152,6 +152,16 @@ Key dependencies:
 - `axios`: HTTP client
 - `@expo/vector-icons`: Icon library
 - `@react-navigation/stack`
+- `--save-dev` 
+- `@testing-library/react-native` 
+- `@testing-library/jest-native`
+- `jest-expo `
+- `react-test-renderer` 
+- `eslint` 
+- `eslint-config-expo` 
+- `prettier`
+- `@babel/preset-env`
+- `babel-jest`
 
 
 ## Development Notes

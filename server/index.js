@@ -210,7 +210,6 @@ app.delete("/incidents/:id", authMiddleware, async (req, res) => {
 });
 
 // VERIFY INCIDENT
-// VERIFY INCIDENT
 app.patch("/incidents/:id/verify", authMiddleware, async (req, res) => {
   const { id } = req.params;
   
