@@ -1,6 +1,5 @@
 import request from 'supertest';
 import app from '../index.js';
-import bcrypt from 'bcrypt';
 
 describe('Auth API', () => {
   describe('POST /auth/signup', () => {
